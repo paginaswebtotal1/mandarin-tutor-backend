@@ -1,5 +1,3 @@
-# Reemplazar main.py (ejecuta este comando)
-cat > main.py << 'EOF'
 import os
 from typing import List
 from fastapi import FastAPI, HTTPException
@@ -21,9 +19,9 @@ api_key = os.environ.get("GEMINI_API_KEY", "").strip()
 client = genai.Client(api_key=api_key)
 
 SYSTEM_PROMPT = """Eres Ming Lǎoshī (明老师), tutora experta de chino mandarín para hispanohablantes.
-Enseñas de forma cálida, paciente y motivadora.
+Enseñas desde cero hasta HSK 6 de forma cálida, paciente y motivadora.
 
-FORMATO OBLIGATORIO en cada respuesta:
+FORMATO OBLIGATORIO:
 [CHINO]: 
 [PINYIN]: 
 [ESPAÑOL]: 
@@ -68,7 +66,10 @@ async def chat(req: ChatRequest):
         contents = []
         for msg in valid_messages:
             role = "user" if msg.role == "user" else "model"
-            contents.append(types.Content(role=role, parts=[types.Part.from_text(text=msg.content)]))
+            contents.append(types.Content(
+                role=role,
+                parts=[types.Part.from_text(text=msg.content)]
+            ))
 
         response = client.models.generate_content(
             model="gemini-2.0-flash",

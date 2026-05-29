@@ -2,10 +2,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List
+import google.generativeai as genai
 import os
-# Usamos el nuevo cliente oficial compatible con Gemini 2.0 y producción
-from google import genai
-from google.genai import types
 
 app = FastAPI(title="Mandarin Tutor API")
 
@@ -17,9 +15,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Inicializamos el cliente moderno de Google GenAI
-# Lee automáticamente la variable GEMINI_API_KEY configurada en tu entorno de Render
-client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY", ""))
+# Configura Gemini con tu API key (la pones en Render como variable de entorno)
+genai.configure(api_key=os.environ.get("GEMINI_API_KEY", ""))
 
 SYSTEM_PROMPT = """Eres Ming Lǎoshī (明老师), tutora experta de chino mandarín para hispanohablantes.
 Enseñas desde cero hasta HSK 6 de forma progresiva y motivadora.
@@ -60,42 +57,27 @@ def health():
 @app.post("/chat")
 async def chat(req: ChatRequest):
     try:
-        # Configuración de las instrucciones del sistema usando el nuevo SDK de Google
-        config = types.GenerateContentConfig(
+        model = genai.GenerativeModel(
+            model_name="gemini-2.0-flash",  # Gratis con límites generosos
             system_instruction=SYSTEM_PROMPT + f"\nNivel del estudiante: {req.level}"
         )
 
-        # Convierte y formatea el historial completo al nuevo formato estricto de Gemini 2.0
-        contents = []
-        messages = req.messages[:-1]  # Todo el historial de la conversación menos el último mensaje
+        # Convierte el historial al formato de Gemini
+        history = []
+        messages = req.messages[:-1]  # Todo menos el último
         for msg in messages:
-            # El nuevo SDK mapea 'user' y 'model' (en lugar de assistant) de forma limpia
-            role = "user" if msg.role == "user" else "model"
-            contents.append(
-                types.Content(
-                    role=role,
-                    parts=[types.Part.from_text(text=msg.content)]
-                )
-            )
+            history.append({
+                "role": "user" if msg.role == "user" else "model",
+                "parts": [msg.content]
+            })
 
-        # Añadimos el último mensaje del usuario al final del contenido a procesar
+        chat_session = model.start_chat(history=history)
+
+        # Último mensaje del usuario
         last_message = req.messages[-1].content
-        contents.append(
-            types.Content(
-                role="user",
-                parts=[types.Part.from_text(text=last_message)]
-            )
-        )
-
-        # Llamada estructurada y nativa al modelo gemini-2.0-flash
-        response = client.models.generate_content(
-            model='gemini-2.0-flash',
-            contents=contents,
-            config=config
-        )
+        response = chat_session.send_message(last_message)
 
         return {"reply": response.text}
 
     except Exception as e:
-        # Levantamos la excepción con el error detallado para que Render lo imprima completo si pasa algo
         raise HTTPException(status_code=500, detail=str(e))

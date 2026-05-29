@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>明老师 · Tutor de Chino Mandarín con IA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --gold: #c0a060;
+    --gold-light: #e8c87a;
+    --bg: #0a0a0f;
+    --bg2: #0f0f1a;
+    --bg3: #141420;
+    --border: #2a2a3e;
+    --text: #e8e0d0;
+    --text2: #a09080;
+    --green: #60a060;
+  }
+
+  body {
+    font-family: 'Space Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  .app {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    grid-template-rows: 60px 1fr;
+    height: 100vh;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 12px;
+    gap: 12px;
+  }
+
+  /* HEADER */
+  .header {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 0 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .logo-chinese { font-family: 'Noto Sans SC'; font-size: 24px; color: var(--gold-light); font-weight: 700; }
+  .logo-text { font-size: 10px; letter-spacing: 3px; color: var(--gold); text-transform: uppercase; }
+  .header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .level-badge { font-size: 9px; letter-spacing: 2px; padding: 4px 12px; border: 1px solid var(--gold); color: var(--gold); border-radius: 2px; }
+  .api-status { font-size: 9px; color: #555; letter-spacing: 1px; }
+  .api-status.ok { color: var(--green); }
+  .api-status.err { color: #e05050; }
+
+  /* LEFT PANEL */
+  .left-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    overflow-y: auto;
+  }
+
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 16px;
+    position: relative;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  }
+
+  /* AVATAR */
+  .avatar-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+  .avatar-svg-wrap {
+    position: relative;
+    width: 160px;
+    height: 160px;
+  }
+  .speaking-ring {
+    position: absolute;
+    inset: -8px;
+    border-radius: 50%;
+    border: 2px solid rgba(192,160,96,0.3);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .speaking-ring.active {
+    opacity: 1;
+    animation: pulse-ring 1.1s ease-in-out infinite;
+  }
+  @keyframes pulse-ring {
+    0%, 100% { transform: scale(1); opacity: 0.5; }
+    50% { transform: scale(1.05); opacity: 1; }
+  }
+  .avatar-name { font-size: 10px; letter-spacing: 3px; color: var(--gold); text-transform: uppercase; }
+  .avatar-status { font-size: 10px; color: #555; min-height: 14px; transition: color 0.3s; }
+  .avatar-status.speaking { color: var(--gold); }
+
+  /* BUBBLE */
+  .speech-bubble {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-left: 2px solid var(--gold);
+    border-radius: 4px;
+    padding: 10px 12px;
+    font-family: 'Noto Sans SC', sans-serif;
+    font-size: 12px;
+    line-height: 1.6;
+    min-height: 55px;
+    width: 100%;
+  }
+  .bubble-chinese { font-size: 18px; color: var(--gold-light); display: block; margin-bottom: 2px; }
+  .bubble-pinyin { font-size: 10px; color: #7070aa; display: block; font-family: 'Space Mono'; }
+  .bubble-trans { font-size: 11px; color: var(--text2); display: block; margin-top: 3px; font-family: 'Space Mono'; }
+
+  /* LEVELS */
+  .level-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+  .lvl-btn {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: #555;
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1px;
+    padding: 5px 3px;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+  .lvl-btn:hover { border-color: var(--gold); color: var(--gold); }
+  .lvl-btn.active { background: rgba(192,160,96,0.1); border-color: var(--gold); color: var(--gold); }
+  .section-label { font-size: 9px; letter-spacing: 2px; color: #444; text-transform: uppercase; margin-bottom: 8px; }
+
+  /* PROGRESS */
+  .progress-bar { height: 2px; background: var(--border); border-radius: 1px; overflow: hidden; margin-top: 4px; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--gold), var(--gold-light)); width: 0%; transition: width 0.8s ease; }
+  .xp-row { display: flex; justify-content: space-between; margin-top: 4px; }
+  .xp-text { font-size: 9px; color: #444; letter-spacing: 1px; }
+
+  /* VOCAB CARDS */
+  .vocab-grid { display: flex; gap: 6px; flex-wrap: wrap; }
+  .vocab-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 5px 8px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .vocab-card:hover { border-color: var(--gold); transform: translateY(-2px); }
+  .vocab-zh { font-family: 'Noto Sans SC'; font-size: 18px; color: var(--gold-light); display: block; }
+  .vocab-py { font-size: 9px; color: #7070aa; display: block; font-family: 'Space Mono'; }
+  .vocab-tr { font-size: 9px; color: #504840; display: block; }
+
+  /* RIGHT PANEL - CHAT */
+  .chat-panel {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .quick-bar {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    background: var(--bg);
+  }
+  .quick-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: #555;
+    font-family: 'Noto Sans SC', sans-serif;
+    font-size: 11px;
+    padding: 4px 10px;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.2s;
+  }
+  .quick-btn:hover { border-color: var(--gold); color: var(--gold); }
+
+  .chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .msg { display: flex; gap: 10px; align-items: flex-start; animation: fadeIn 0.3s ease; }
+  .msg.user { flex-direction: row-reverse; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; } }
+
+  .msg-av {
+    width: 30px; height: 30px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; flex-shrink: 0;
+  }
+  .msg.ai .msg-av { background: var(--bg3); border: 1px solid var(--gold); color: var(--gold); font-family: 'Noto Sans SC'; }
+  .msg.user .msg-av { background: #141e14; border: 1px solid var(--green); color: var(--green); font-size: 9px; }
+
+  .msg-body { max-width: 80%; }
+  .msg.user .msg-body { display: flex; flex-direction: column; align-items: flex-end; }
+
+  .msg-bubble {
+    padding: 10px 14px;
+    border-radius: 2px;
+    font-size: 13px;
+    line-height: 1.8;
+  }
+  .msg.ai .msg-bubble {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-left: 2px solid var(--gold);
+    font-family: 'Noto Sans SC', sans-serif;
+  }
+  .msg.user .msg-bubble {
+    background: #141e14;
+    border: 1px solid #2a3e2a;
+    border-right: 2px solid var(--green);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+  }
+
+  .m-zh { font-size: 20px; color: var(--gold-light); display: block; margin-bottom: 2px; }
+  .m-py { font-size: 10px; color: #7070aa; display: block; font-family: 'Space Mono'; letter-spacing: 1px; }
+  .m-es { font-size: 12px; color: var(--gold-light); display: block; margin-top: 3px; opacity: 0.9; }
+  .m-pron { font-size: 12px; color: #88aacc; display: block; margin-top: 3px; }
+  .m-text { font-size: 13px; color: #c0b8a8; display: block; margin-top: 4px; }
+  .correction { background: #2a1410; border-left: 2px solid #e05050; padding: 6px 10px; margin-top: 6px; font-size: 11px; color: #e08080; border-radius: 0 2px 2px 0; }
+  .correcto { background: #0a2010; border-left: 2px solid #60c060; padding: 6px 10px; margin-top: 6px; font-size: 11px; color: #80e080; border-radius: 0 2px 2px 0; }
+
+  /* TYPING */
+  .typing-wrap { padding: 6px 16px 0; }
+  .typing { display: none; gap: 5px; padding: 8px 12px; align-items: center; }
+  .typing.show { display: flex; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gold); animation: blink 1.2s infinite; }
+  .dot:nth-child(2) { animation-delay: 0.2s; }
+  .dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%,80%,100%{transform:scale(0.5);opacity:0.3;} 40%{transform:scale(1);opacity:1;} }
+
+  /* INPUT */
+  .input-area {
+    border-top: 1px solid var(--border);
+    padding: 10px;
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+    background: var(--bg);
+  }
+  .chat-input {
+    flex: 1;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    resize: none;
+    outline: none;
+    min-height: 42px;
+    max-height: 100px;
+    transition: border-color 0.2s;
+  }
+  .chat-input:focus { border-color: var(--gold); }
+  .chat-input::placeholder { color: #333; }
+  .send-btn {
+    background: var(--gold);
+    border: none;
+    color: var(--bg);
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    padding: 10px 16px;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .send-btn:hover { background: var(--gold-light); }
+  .send-btn:active { transform: scale(0.97); }
+  .send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  @media (max-width: 768px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: 60px auto 1fr; height: auto; min-height: 100vh; }
+    .left-panel { display: none; }
+    .chat-panel { min-height: 80vh; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="header">
+    <div>
+      <div class="logo-chinese">学中文</div>
+      <div class="logo-text">Mandarin AI Tutor · 明老师</div>
+    </div>
+    <div class="header-right">
+      <span class="api-status" id="apiStatus">● conectando...</span>
+      <span class="level-badge" id="levelBadge">HSK 1 · PRINCIPIANTE</span>
+    </div>
+  </div>
+
+  <div class="left-panel">
+
+    <div class="card">
+      <div class="avatar-wrap">
+        <div class="avatar-svg-wrap">
+          <div class="speaking-ring" id="speakingRing"></div>
+          <svg viewBox="0 0 180 180" width="160" height="160" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <radialGradient id="sg" cx="50%" cy="40%" r="50%">
+                <stop offset="0%" stop-color="#f0c898"/>
+                <stop offset="100%" stop-color="#d4986a"/>
+              </radialGradient>
+              <radialGradient id="bg" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="#1e1e2e"/>
+                <stop offset="100%" stop-color="#0f0f1a"/>
+              </radialGradient>
+            </defs>
+            <circle cx="90" cy="90" r="88" fill="url(#bg)" stroke="#2a2a3e" stroke-width="1"/>
+            <circle cx="90" cy="90" r="88" fill="none" stroke="#c0a060" stroke-width="0.5" opacity="0.5"/>
+            <path d="M30 175 Q30 140 60 130 L90 145 L120 130 Q150 140 150 175 Z" fill="#8b2020"/>
+            <path d="M70 130 L90 145 L110 130 L108 128 L90 142 L72 128 Z" fill="#c0a060"/>
+            <rect x="78" y="115" width="24" height="20" rx="4" fill="url(#sg)"/>
+            <ellipse cx="90" cy="85" rx="48" ry="52" fill="url(#sg)"/>
+            <path d="M42 72 Q44 30 90 28 Q136 30 138 72 Q130 55 90 52 Q50 55 42 72 Z" fill="#1a0a00"/>
+            <ellipse cx="90" cy="30" rx="14" ry="10" fill="#1a0a00"/>
+            <ellipse cx="90" cy="22" rx="8" ry="6" fill="#1a0a00"/>
+            <rect x="86" y="16" width="8" height="4" rx="2" fill="#c0a060"/>
+            <rect x="88" y="13" width="4" height="6" rx="1" fill="#c0a060"/>
+            <path d="M60 72 Q70 67 80 70" stroke="#3a1a00" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <path d="M100 70 Q110 67 120 72" stroke="#3a1a00" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+            <ellipse cx="72" cy="82" rx="9" ry="7" fill="white"/>
+            <ellipse cx="108" cy="82" rx="9" ry="7" fill="white"/>
+            <ellipse cx="73" cy="83" rx="6" ry="6" fill="#1a0a00"/>
+            <ellipse cx="109" cy="83" rx="6" ry="6" fill="#1a0a00"/>
+            <ellipse cx="75" cy="81" rx="2" ry="2" fill="white"/>
+            <ellipse cx="111" cy="81" rx="2" ry="2" fill="white"/>
+            <path d="M63 79 Q72 75 81 79" stroke="#3a1a00" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+            <path d="M99 79 Q108 75 117 79" stroke="#3a1a00" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+            <path d="M88 95 Q86 102 82 105 Q90 108 98 105 Q94 102 92 95 Z" fill="#c8885a" fill-opacity="0.5"/>
+            <g id="mouthGroup">
+              <path id="mouthPath" d="M76 118 Q90 122 104 118" stroke="#8b3a3a" stroke-width="2" fill="none" stroke-linecap="round"/>
+              <ellipse id="mouthOpen" cx="90" cy="120" rx="0" ry="0" fill="#3a0a0a"/>
+            </g>
+            <ellipse cx="42" cy="90" rx="8" ry="10" fill="#d4986a"/>
+            <ellipse cx="138" cy="90" rx="8" ry="10" fill="#d4986a"/>
+            <circle cx="42" cy="98" r="4" fill="#c0a060"/>
+            <circle cx="42" cy="98" r="2" fill="#e8c87a"/>
+            <circle cx="138" cy="98" r="4" fill="#c0a060"/>
+            <circle cx="138" cy="98" r="2" fill="#e8c87a"/>
+            <ellipse cx="60" cy="98" rx="10" ry="6" fill="#e88888" fill-opacity="0.25"/>
+            <ellipse cx="120" cy="98" rx="10" ry="6" fill="#e88888" fill-opacity="0.25"/>
+            <path d="M5 5 L25 5 L5 25" fill="none" stroke="#c0a060" stroke-width="1" opacity="0.4"/>
+            <path d="M175 5 L155 5 L175 25" fill="none" stroke="#c0a060" stroke-width="1" opacity="0.4"/>
+            <path d="M5 175 L25 175 L5 155" fill="none" stroke="#c0a060" stroke-width="1" opacity="0.4"/>
+            <path d="M175 175 L155 175 L175 155" fill="none" stroke="#c0a060" stroke-width="1" opacity="0.4"/>
+          </svg>
+        </div>
+        <div class="avatar-name">Ming Lǎoshī · 明老师</div>
+        <div class="avatar-status" id="avatarStatus">Lista para enseñar</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="speech-bubble">
+        <span class="bubble-chinese" id="bChinese">你好！</span>
+        <span class="bubble-pinyin" id="bPinyin">Nǐ hǎo!</span>
+        <span class="bubble-trans" id="bTrans">¡Hola! ¿Empezamos?</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-label">Selecciona tu nivel</div>
+      <div class="level-grid">
+        <button class="lvl-btn active" onclick="setLevel('hsk1','HSK 1 · PRINCIPIANTE')">HSK 1</button>
+        <button class="lvl-btn" onclick="setLevel('hsk2','HSK 2 · ELEMENTAL')">HSK 2</button>
+        <button class="lvl-btn" onclick="setLevel('hsk3','HSK 3 · INTERMEDIO')">HSK 3</button>
+        <button class="lvl-btn" onclick="setLevel('hsk4','HSK 4 · INTERM. ALTO')">HSK 4</button>
+        <button class="lvl-btn" onclick="setLevel('hsk5','HSK 5 · AVANZADO')">HSK 5</button>
+        <button class="lvl-btn" onclick="setLevel('hsk6','HSK 6 · MAESTRO')">HSK 6</button>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="pFill"></div></div>
+      <div class="xp-row">
+        <span class="xp-text">PROGRESO</span>
+        <span class="xp-text" id="xpText">0 XP</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-label">Vocabulario rápido</div>
+      <div class="vocab-grid">
+        <div class="vocab-card" onclick="ask('Enséñame más sobre: 你好')"><span class="vocab-zh">你好</span><span class="vocab-py">nǐ hǎo</span><span class="vocab-tr">hola</span></div>
+        <div class="vocab-card" onclick="ask('Enséñame más sobre: 谢谢')"><span class="vocab-zh">谢谢</span><span class="vocab-py">xiè xie</span><span class="vocab-tr">gracias</span></div>
+        <div class="vocab-card" onclick="ask('Enséñame más sobre: 我爱你')"><span class="vocab-zh">我爱你</span><span class="vocab-py">wǒ ài nǐ</span><span class="vocab-tr">te amo</span></div>
+        <div class="vocab-card" onclick="ask('Enséñame más sobre: 吃饭')"><span class="vocab-zh">吃饭</span><span class="vocab-py">chī fàn</span><span class="vocab-tr">comer</span></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="chat-panel">
+    <div class="quick-bar">
+      <button class="quick-btn" onclick="ask('¿Cómo me presento en chino?')">Presentarme</button>
+      <button class="quick-btn" onclick="ask('Enséñame los números del 1 al 10 en chino')">Números</button>
+      <button class="quick-btn" onclick="ask('¿Cómo pido comida en un restaurante en China?')">Restaurante</button>
+      <button class="quick-btn" onclick="ask('Enséñame los colores en chino mandarín')">Colores</button>
+      <button class="quick-btn" onclick="ask('Dame una lección completa de vocabulario básico HSK1')">Lección HSK1</button>
+      <button class="quick-btn" onclick="ask('Corrige esta frase: wo shi colombiano')">Corregir frase</button>
+    </div>
+
+    <div class="chat-messages" id="chatMessages">
+      <div class="msg ai">
+        <div class="msg-av">明</div>
+        <div class="msg-body">
+          <div class="msg-bubble">
+            <span class="m-zh">你好，同学！欢迎来学中文！</span>
+            <span class="m-py">Nǐ hǎo, tóngxué! Huānyíng lái xué zhōngwén!</span>
+            <span class="m-text">¡Hola, estudiante! ¡Bienvenido a aprender chino! Soy Ming Lǎoshī (明老师). Puedo enseñarte desde cero hasta nivel avanzado HSK 6, corregir tus errores y conversar contigo como si fuera una tutora real. ¿Por dónde empezamos? 🌸</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="typing-wrap">
+      <div class="msg ai">
+        <div class="msg-av">明</div>
+        <div class="typing" id="typing">
+          <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-area">
+      <textarea class="chat-input" id="chatInput"
+        placeholder="Escribe en español o prueba en chino... (Enter para enviar)"
+        rows="1"
+        onkeydown="handleKey(event)"></textarea>
+      <button class="send-btn" id="sendBtn" onclick="sendMessage()">Enviar ↗</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// =============================================
+// CONFIGURACIÓN — cambia esta URL por la de Render
+// =============================================
+const API_URL = window.location.hostname === 'localhost'
+  ? 'http://localhost:8000'
+  : 'https://mandarin-tutor-backend.onrender.com';  // ← CAMBIA ESTO cuando tengas la URL de Render
+
+// =============================================
+
+let currentLevel = 'hsk1';
+let xp = 0;
+let conversation = [];
+let mouthInterval = null;
+
+async function checkAPI() {
+  try {
+    const r = await fetch(API_URL + '/health');
+    if (r.ok) {
+      document.getElementById('apiStatus').textContent = '● API conectada';
+      document.getElementById('apiStatus').className = 'api-status ok';
+    }
+  } catch {
+    document.getElementById('apiStatus').textContent = '● API desconectada';
+    document.getElementById('apiStatus').className = 'api-status err';
+  }
+}
+checkAPI();
+
+function setLevel(level, label) {
+  currentLevel = level;
+  document.querySelectorAll('.lvl-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  document.getElementById('levelBadge').textContent = label;
+}
+
+function addXP(n) {
+  xp = Math.min(xp + n, 500);
+  document.getElementById('pFill').style.width = Math.min(xp / 5, 100) + '%';
+  document.getElementById('xpText').textContent = xp + ' XP';
+}
+
+function animateMouth(on) {
+  const ring = document.getElementById('speakingRing');
+  const status = document.getElementById('avatarStatus');
+  const mp = document.getElementById('mouthPath');
+  const mo = document.getElementById('mouthOpen');
+  if (on) {
+    ring.classList.add('active');
+    status.textContent = 'Hablando...';
+    status.className = 'avatar-status speaking';
+    mouthInterval = setInterval(() => {
+      const open = Math.random() > 0.4;
+      mo.setAttribute('rx', open ? 4 + Math.random() * 8 : 0);
+      mo.setAttribute('ry', open ? 3 + Math.random() * 5 : 0);
+      mp.setAttribute('d', open ? 'M76 116 Q90 116 104 116' : 'M76 118 Q90 122 104 118');
+    }, 130);
+  } else {
+    clearInterval(mouthInterval);
+    ring.classList.remove('active');
+    status.textContent = 'Lista para enseñar';
+    status.className = 'avatar-status';
+    mp.setAttribute('d', 'M76 118 Q90 122 104 118');
+    mo.setAttribute('rx', 0); mo.setAttribute('ry', 0);
+  }
+}
+
+function updateBubble(text) {
+  const zh = text.match(/\[CHINO\]:\s*([^\n]+)/);
+  const py = text.match(/\[PINYIN\]:\s*([^\n]+)/);
+  const es = text.match(/\[ESPAÑOL\]:\s*([^\n]+)/);
+  if (zh) {
+    document.getElementById('bChinese').textContent = zh[1].trim();
+    document.getElementById('bPinyin').textContent = py ? py[1].trim() : '';
+    document.getElementById('bTrans').textContent = es ? es[1].trim() : '';
+  } else {
+    document.getElementById('bTrans').textContent = text.replace(/\[[A-Z]+\]:[^\n]*/g, '').substring(0, 50) + '...';
+  }
+}
+
+function speakText(text) {
+  if (!window.speechSynthesis) return;
+  window.speechSynthesis.cancel();
+  const clean = text.replace(/\[[A-Z]+\]:[^\n]*/g, '').replace(/[\n\r]+/g, ' ').trim().substring(0, 250);
+  const u = new SpeechSynthesisUtterance(clean);
+  u.lang = 'es-ES'; u.rate = 0.9;
+  u.onstart = () => animateMouth(true);
+  u.onend = u.onerror = () => animateMouth(false);
+  window.speechSynthesis.speak(u);
+}
+
+function formatAI(text) {
+  return text
+    .replace(/\[CHINO\]:\s*([^\n]+)/g, '<span class="m-zh">$1</span>')
+    .replace(/\[PINYIN\]:\s*([^\n]+)/g, '<span class="m-py">$1</span>')
+    .replace(/\[ESPAÑOL\]:\s*([^\n]+)/g, '<span class="m-es">$1</span>')
+    .replace(/\[PRONUNCIACION\]:\s*([^\n]+)/g, '<span class="m-pron">🗣 $1</span>')
+    .replace(/\[CORRECCION\]:\s*([^\n]+)/g, '<div class="correction">✗ $1</div>')
+    .replace(/\[CORRECTO\]:\s*([^\n]+)/g, '<div class="correcto">✓ $1</div>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>');
+}
+
+function addMsg(role, content) {
+  const box = document.getElementById('chatMessages');
+  const d = document.createElement('div');
+  d.className = 'msg ' + role;
+  d.innerHTML = `
+    <div class="msg-av">${role === 'ai' ? '明' : 'Tú'}</div>
+    <div class="msg-body">
+      <div class="msg-bubble">${role === 'ai' ? formatAI(content) : content}</div>
+    </div>`;
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+  if (role === 'ai') { updateBubble(content); speakText(content); addXP(15); }
+  else { addXP(5); }
+}
+
+function setLoading(on) {
+  document.getElementById('sendBtn').disabled = on;
+  document.getElementById('typing').className = on ? 'typing show' : 'typing';
+  if (on) {
+    document.getElementById('avatarStatus').textContent = 'Pensando...';
+    document.getElementById('avatarStatus').className = 'avatar-status speaking';
+  }
+}
+
+async function sendMessage() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  if (!text || document.getElementById('sendBtn').disabled) return;
+  input.value = '';
+  input.style.height = 'auto';
+  addMsg('user', text);
+  conversation.push({ role: 'user', content: text });
+  setLoading(true);
+
+  try {
+    const res = await fetch(API_URL + '/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messages: conversation.slice(-12),
+        level: currentLevel
+      })
+    });
+    const data = await res.json();
+    const reply = data.reply || 'Error en la respuesta';
+    conversation.push({ role: 'assistant', content: reply });
+    setLoading(false);
+    addMsg('ai', reply);
+  } catch (err) {
+    setLoading(false);
+    addMsg('ai', '❌ No pude conectar con el servidor. Verifica que el backend en Render esté activo.');
+  }
+}
+
+function ask(text) {
+  document.getElementById('chatInput').value = text;
+  sendMessage();
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+
+document.getElementById('chatInput').addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+});
+</script>
+</body>
+</html>

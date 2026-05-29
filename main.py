@@ -6,23 +6,19 @@ from typing import List
 from google import genai
 from google.genai import types
 
-app = FastAPI()
+app = FastAPI(title="Ming Laoshi")
 
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 api_key = os.environ.get("GEMINI_API_KEY", "").strip()
 client = genai.Client(api_key=api_key)
 
-SYSTEM_PROMPT = """Eres Ming Lǎoshī (明老师), una tutora china amable y paciente.
-Enseñas mandarín desde HSK1 hasta HSK6.
-Siempre responde en este formato exacto:
-
-[CHINO]: 
-[PINYIN]: 
-[ESPAÑOL]: 
-[PRONUNCIACION]: 
-
-Sé motivadora y corrige errores con [CORRECCION] si es necesario."""
+SYSTEM_PROMPT = """Eres Ming Lǎoshī (明老师), una tutora amable y paciente de chino mandarín."""
 
 class Message(BaseModel):
     role: str
@@ -34,25 +30,28 @@ class ChatRequest(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"status": "healthy", "model": "gemini-1.5-flash"}
+    return {"status": "healthy"}
 
 @app.post("/chat")
 async def chat(req: ChatRequest):
     try:
         if not api_key:
-            raise HTTPException(500, "No API Key")
+            raise HTTPException(status_code=500, detail="GEMINI_API_KEY no configurada")
 
         config = types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT + f"\nNivel del estudiante: {req.level.upper()}"
+            system_instruction=SYSTEM_PROMPT
         )
 
         contents = []
-        for m in req.messages[-12:]:
-            role = "user" if m.role == "user" else "model"
-            contents.append(types.Content(role=role, parts=[types.Part.from_text(m.content)]))
+        for msg in req.messages[-10:]:
+            role = "user" if msg.role == "user" else "model"
+            contents.append(types.Content(
+                role=role,
+                parts=[types.Part.from_text(text=msg.content)]
+            ))
 
         response = client.models.generate_content(
-            model="gemini-1.5-flash",
+            model="gemini-1.5-flash-latest",   # Modelo más estable
             contents=contents,
             config=config
         )
@@ -60,7 +59,11 @@ async def chat(req: ChatRequest):
         return {"reply": response.text}
 
     except Exception as e:
-        print("ERROR:", str(e))
-        if "429" in str(e):
-            raise HTTPException(429, "Cuota agotada - usa otra API Key")
-        raise HTTPException(500, "Error interno")
+        error = str(e)
+        print(f"ERROR: {error}")
+        if "429" in error:
+            raise HTTPException(status_code=429, detail="Cuota agotada")
+        elif "401" in error:
+            raise HTTPException(status_code=401, detail="API Key inválida")
+        else:
+            raise HTTPException(status_code=500, detail="Error interno")

@@ -3,17 +3,17 @@ from typing import List
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from google import genai
-from google.genai import types
+from openai import OpenAI
 
 app = FastAPI(title="Ming Laoshi")
-
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-api_key = os.environ.get("GEMINI_API_KEY", "").strip()
-client = genai.Client(api_key=api_key)
+client = OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=os.environ.get("OPENROUTER_API_KEY", "")
+)
 
-SYSTEM_PROMPT = """Eres Ming Lǎoshī (明老师), tutora paciente y amable de chino mandarín."""
+SYSTEM_PROMPT = """Eres Ming Lǎoshī (明老师), tutora experta de chino mandarín para hispanohablantes. Enseñas desde cero hasta HSK 6. FORMATO OBLIGATORIO: Para palabras chinas usa [CHINO]: [PINYIN]: [ESPAÑOL]: [PRONUNCIACION]:. Si el estudiante escribe en chino usa [CORRECCION]: o [CORRECTO]:. Sé cálida y motivadora. Responde siempre en español."""
 
 class Message(BaseModel):
     role: str
@@ -34,25 +34,15 @@ def health():
 @app.post("/chat")
 async def chat(req: ChatRequest):
     try:
-        if not api_key:
-            raise HTTPException(500, "GEMINI_API_KEY no configurada")
-
-        config = types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT)
-
-        contents = []
+        messages = [{"role": "system", "content": SYSTEM_PROMPT + f" Nivel del estudiante: {req.level}"}]
         for m in req.messages[-12:]:
-            role = "user" if m.role == "user" else "model"
-            contents.append(types.Content(role=role, parts=[types.Part.from_text(text=m.content)]))
+            messages.append({"role": m.role, "content": m.content})
 
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=contents,
-            config=config
+        response = client.chat.completions.create(
+            model="mistralai/mistral-7b-instruct:free",
+            messages=messages
         )
-        return {"reply": response.text}
-
+        return {"reply": response.choices[0].message.content}
     except Exception as e:
         print("ERROR:", str(e))
-        if "429" in str(e):
-            raise HTTPException(429, "Cuota agotada")
-        raise HTTPException(500, "Error interno")
+        raise HTTPException(500, str(e))

@@ -39,7 +39,7 @@ async def chat(req: ChatRequest):
             messages.append({"role": m.role, "content": m.content})
 
         response = client.chat.completions.create(
-            model="mistralai/mistral-small-3.2-24b-instruct:free",
+            model="openrouter/auto",
             messages=messages
         )
         return {"reply": response.choices[0].message.content}

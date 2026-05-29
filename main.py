@@ -1,3 +1,5 @@
+# Reemplazar main.py (ejecuta este comando)
+cat > main.py << 'EOF'
 import os
 from typing import List
 from fastapi import FastAPI, HTTPException
@@ -15,20 +17,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ==================== CONFIG ====================
 api_key = os.environ.get("GEMINI_API_KEY", "").strip()
 client = genai.Client(api_key=api_key)
 
 SYSTEM_PROMPT = """Eres Ming Lǎoshī (明老师), tutora experta de chino mandarín para hispanohablantes.
-Enseñas desde cero hasta HSK 6 de forma cálida, paciente y motivadora.
+Enseñas de forma cálida, paciente y motivadora.
 
-FORMATO OBLIGATORIO:
+FORMATO OBLIGATORIO en cada respuesta:
 [CHINO]: 
 [PINYIN]: 
 [ESPAÑOL]: 
 [PRONUNCIACION]: 
 
-Si hay error usa [CORRECCION], si está correcto usa [CORRECTO]."""
+Si hay error: [CORRECCION]: ...
+Si está bien: [CORRECTO]: ..."""
 
 class Message(BaseModel):
     role: str
@@ -40,7 +42,7 @@ class ChatRequest(BaseModel):
 
 @app.get("/")
 def root():
-    return {"status": "ok", "has_key": bool(api_key)}
+    return {"status": "ok"}
 
 @app.get("/health")
 def health():
@@ -50,13 +52,12 @@ def health():
 async def chat(req: ChatRequest):
     try:
         if not api_key:
-            raise HTTPException(status_code=500, detail="GEMINI_API_KEY no configurada en Render.")
+            raise HTTPException(status_code=500, detail="GEMINI_API_KEY no configurada.")
 
         config = types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT + f"\nNivel actual: {req.level.upper()}"
+            system_instruction=SYSTEM_PROMPT + f"\nNivel: {req.level.upper()}"
         )
 
-        # Preparar historial
         valid_messages = [m for m in req.messages if m.role in ("user", "model")]
         while valid_messages and valid_messages[0].role != "user":
             valid_messages.pop(0)
@@ -67,10 +68,7 @@ async def chat(req: ChatRequest):
         contents = []
         for msg in valid_messages:
             role = "user" if msg.role == "user" else "model"
-            contents.append(types.Content(
-                role=role,
-                parts=[types.Part.from_text(text=msg.content)]
-            ))
+            contents.append(types.Content(role=role, parts=[types.Part.from_text(text=msg.content)]))
 
         response = client.models.generate_content(
             model="gemini-2.0-flash",
@@ -83,7 +81,6 @@ async def chat(req: ChatRequest):
     except Exception as e:
         error_str = str(e)
         print(f"ERROR CRÍTICO EN CHAT: {error_str}")
-        
         if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
-            raise HTTPException(status_code=429, detail="Cuota de Gemini agotada. Por favor crea una nueva API Key.")
-        raise HTTPException(status_code=500, detail="Error en el servidor.")
+            raise HTTPException(status_code=429, detail="Cuota de Gemini agotada. Crea una nueva API Key.")
+        raise HTTPException(status_code=500, detail="Error interno del servidor.")

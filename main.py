@@ -3,13 +3,11 @@ from typing import List
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-# Importamos el nuevo SDK oficial de Google GenAI
 from google import genai
 from google.genai import types
 
 app = FastAPI(title="Ming Laoshi - Mandarin Tutor API")
 
-# Configuración de CORS estricta pero abierta para tu frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -17,7 +15,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Inicialización segura del cliente de Google
 api_key = os.environ.get("GEMINI_API_KEY", "")
 client = genai.Client(api_key=api_key)
 
@@ -59,19 +56,23 @@ def health():
 @app.post("/chat")
 async def chat(req: ChatRequest):
     try:
-        # Validar que la API Key exista antes de hacer la petición
         if not api_key:
-            raise HTTPException(status_code=500, detail="GEMINI_API_KEY no configurada en Render.")
+            raise HTTPException(status_code=500, detail="GEMINI_API_KEY no encontrada.")
 
-        # Configuramos las instrucciones del sistema y el nivel dinámico que viene de tu index.html
         config = types.GenerateContentConfig(
             system_instruction=SYSTEM_PROMPT + f"\n\nNivel actual del estudiante: {req.level.upper()}"
         )
 
-        # Formateamos el contenido adaptando los roles del frontend ('assistant') a los de Gemini ('model')
         formatted_contents = []
-        for msg in req.messages:
-            # Tu index.html usa 'assistant', pero Gemini exige 'model'
+        
+        # FILTRO DE SEGURIDAD: Gemini exige que el historial EMPIECE por el usuario ('user')
+        # Si el primer mensaje de la lista es un saludo del asistente, lo ignoramos para evitar el Error 500
+        valid_messages = req.messages
+        while valid_messages and valid_messages[0].role != "user":
+            valid_messages.pop(0)
+
+        # Mapeamos los mensajes limpiando los roles
+        for msg in valid_messages:
             role = "user" if msg.role == "user" else "model"
             formatted_contents.append(
                 types.Content(
@@ -80,11 +81,11 @@ async def chat(req: ChatRequest):
                 )
             )
 
-        # Si por alguna razón el historial llegó vacío, enviamos una estructura básica segura
+        # Si el historial quedó vacío tras limpiar o no venían mensajes, lanzamos error controlado
         if not formatted_contents:
-            raise HTTPException(status_code=400, detail="La lista de mensajes no puede estar vacía.")
+            raise HTTPException(status_code=400, detail="El historial debe empezar con un mensaje del usuario.")
 
-        # Llamada oficial al modelo de última generación
+        # Llamada a Gemini 2.0 Flash
         response = client.models.generate_content(
             model="gemini-2.0-flash",
             contents=formatted_contents,
@@ -94,6 +95,6 @@ async def chat(req: ChatRequest):
         return {"reply": response.text}
 
     except Exception as e:
-        # Esto imprimirá el error exacto en los logs de Render para que lo podamos ver
-        print(f"ERROR CRÍTICO INTERNO: {str(e)}")
+        # Esto nos dejará ver en los logs de Render exactamente qué falló si no es el historial
+        print(f"ERROR GENERANDO CONTENIDO: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

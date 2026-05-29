@@ -3,42 +3,32 @@ from typing import List
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-# Usamos el SDK oficial y moderno de Google GenAI
 from google import genai
 from google.genai import types
 
 app = FastAPI(title="Ming Laoshi - Mandarin Tutor API")
 
-# Configuración de CORS abierta para conectar con tu frontend en Vercel
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Inicialización segura de la clave de Gemini
-api_key = os.environ.get("GEMINI_API_KEY", "")
+# ==================== CONFIG ====================
+api_key = os.environ.get("GEMINI_API_KEY", "").strip()
 client = genai.Client(api_key=api_key)
 
 SYSTEM_PROMPT = """Eres Ming Lǎoshī (明老师), tutora experta de chino mandarín para hispanohablantes.
-Enseñas desde cero hasta HSK 6 de forma progresiva y motivadora.
+Enseñas desde cero hasta HSK 6 de forma cálida, paciente y motivadora.
 
-FORMATO OBLIGATORIO en cada respuesta:
-- Para palabras/frases chinas usa SIEMPRE:
-  [CHINO]: carácter(es)
-  [PINYIN]: transcripción con tonos
-  [ESPAÑOL]: traducción
-  [PRONUNCIACION]: tip para hispanohablantes
+FORMATO OBLIGATORIO:
+[CHINO]: 
+[PINYIN]: 
+[ESPAÑOL]: 
+[PRONUNCIACION]: 
 
-- Si el estudiante escribe en chino:
-  [CORRECCION]: "escribiste X, lo correcto es Y porque..."
-  o [CORRECTO]: "¡Perfecto! X significa..."
-
-- Estructura lecciones con: concepto, 3-4 ejemplos, mini-ejercicio al final
-- Sé cálida, paciente y motivadora
-- Incluye curiosidades culturales relevantes
-- Responde siempre en español salvo que el usuario pida otra cosa."""
+Si hay error usa [CORRECCION], si está correcto usa [CORRECTO]."""
 
 class Message(BaseModel):
     role: str
@@ -50,55 +40,50 @@ class ChatRequest(BaseModel):
 
 @app.get("/")
 def root():
-    return {"status": "ok", "message": "API de Ming Laoshi corriendo"}
+    return {"status": "ok", "has_key": bool(api_key)}
 
 @app.get("/health")
 def health():
-    return {"status": "healthy"}
+    return {"status": "healthy", "has_key": bool(api_key)}
 
 @app.post("/chat")
 async def chat(req: ChatRequest):
     try:
-        # Validación de seguridad de la API Key
         if not api_key:
-            raise HTTPException(status_code=500, detail="GEMINI_API_KEY no configurada en las variables de entorno de Render.")
+            raise HTTPException(status_code=500, detail="GEMINI_API_KEY no configurada en Render.")
 
-        # Configuración de las instrucciones del sistema con el nivel dinámico enviado por el frontend
         config = types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT + f"\n\nNivel actual del estudiante: {req.level.upper()}"
+            system_instruction=SYSTEM_PROMPT + f"\nNivel actual: {req.level.upper()}"
         )
 
-        formatted_contents = []
-        
-        # Filtro de seguridad: Gemini exige que las conversaciones inicien estrictamente con el rol 'user'
-        valid_messages = req.messages
+        # Preparar historial
+        valid_messages = [m for m in req.messages if m.role in ("user", "model")]
         while valid_messages and valid_messages[0].role != "user":
             valid_messages.pop(0)
 
-        # Mapeo y traducción de roles limpia para Gemini 2.0
+        if not valid_messages:
+            valid_messages = [Message(role="user", content="Hola")]
+
+        contents = []
         for msg in valid_messages:
             role = "user" if msg.role == "user" else "model"
-            formatted_contents.append(
-                types.Content(
-                    role=role,
-                    parts=[types.Part.from_text(text=msg.content)]
-                )
-            )
+            contents.append(types.Content(
+                role=role,
+                parts=[types.Part.from_text(text=msg.content)]
+            ))
 
-        # Si el historial se queda vacío tras la limpieza, lanzamos una excepción controlada
-        if not formatted_contents:
-            raise HTTPException(status_code=400, detail="El historial de chat no puede estar vacío y debe comenzar con un mensaje del usuario.")
-
-        # Llamada oficial al modelo de última generación de Google
         response = client.models.generate_content(
             model="gemini-2.0-flash",
-            contents=formatted_contents,
+            contents=contents,
             config=config
         )
 
         return {"reply": response.text}
 
     except Exception as e:
-        # Esto nos permitirá auditar el error exacto directamente desde la consola negra de Render
-        print(f"ERROR CRÍTICO EN CHAT: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        error_str = str(e)
+        print(f"ERROR CRÍTICO EN CHAT: {error_str}")
+        
+        if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+            raise HTTPException(status_code=429, detail="Cuota de Gemini agotada. Por favor crea una nueva API Key.")
+        raise HTTPException(status_code=500, detail="Error en el servidor.")

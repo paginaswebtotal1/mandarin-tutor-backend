@@ -618,7 +618,7 @@ async function sendMessage() {
     });
     const data = await res.json();
     const reply = data.reply || 'Error en la respuesta';
-    conversation.push({ role: 'assistant', content: reply });
+    conversation.push({ role: 'model', content: reply });
     setLoading(false);
     addMsg('ai', reply);
   } catch (err) {

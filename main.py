@@ -19,7 +19,7 @@ api_key = os.environ.get("GEMINI_API_KEY", "").strip()
 client = genai.Client(api_key=api_key)
 
 SYSTEM_PROMPT = """Eres Ming Lǎoshī (明老师), tutora experta de chino mandarín para hispanohablantes.
-Enseñas desde cero hasta HSK 6 de forma cálida, paciente y motivadora.
+Enseñas de forma cálida, paciente y motivadora.
 
 FORMATO OBLIGATORIO:
 [CHINO]: 
@@ -28,7 +28,7 @@ FORMATO OBLIGATORIO:
 [PRONUNCIACION]: 
 
 Si hay error: [CORRECCION]: ...
-Si está bien: [CORRECTO]: ..."""
+Si está correcto: [CORRECTO]: ..."""
 
 class Message(BaseModel):
     role: str
@@ -66,13 +66,10 @@ async def chat(req: ChatRequest):
         contents = []
         for msg in valid_messages:
             role = "user" if msg.role == "user" else "model"
-            contents.append(types.Content(
-                role=role,
-                parts=[types.Part.from_text(text=msg.content)]
-            ))
+            contents.append(types.Content(role=role, parts=[types.Part.from_text(text=msg.content)]))
 
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-1.5-flash",
             contents=contents,
             config=config
         )
@@ -83,5 +80,5 @@ async def chat(req: ChatRequest):
         error_str = str(e)
         print(f"ERROR CRÍTICO EN CHAT: {error_str}")
         if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
-            raise HTTPException(status_code=429, detail="Cuota de Gemini agotada. Crea una nueva API Key.")
+            raise HTTPException(status_code=429, detail="Cuota de Gemini agotada.")
         raise HTTPException(status_code=500, detail="Error interno del servidor.")

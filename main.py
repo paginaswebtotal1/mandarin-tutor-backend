@@ -58,7 +58,7 @@ def health():
 async def chat(req: ChatRequest):
     try:
         model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash",  # Gratis con límites generosos
+            model_name="gemini-2.0-flash",  # Gratis con límites generosos
             system_instruction=SYSTEM_PROMPT + f"\nNivel del estudiante: {req.level}"
         )
 

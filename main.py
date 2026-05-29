@@ -45,7 +45,7 @@ async def chat(req: ChatRequest):
             contents.append(types.Content(role=role, parts=[types.Part.from_text(m.content)]))
 
         response = client.models.generate_content(
-            model="gemini-1.5-flash-latest",
+            model="gemini-2.0-flash",
             contents=contents,
             config=config
         )
